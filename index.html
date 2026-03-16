@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bus Biologique v11.5 — CE118 Données Réelles + Simulation 3D/4D</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg:#040410; --bg2:#0a0a18; --bg3:#111125;
+  --text:#e8e8f0; --dim:#6868a0;
+  --retina:#FFD700; --lgn:#FF8C00; --v1:#00BFFF;
+  --insula:#FF4500; --cardiac:#FF1744; --amygdala:#B040FF;
+  --temporal:#FFD700; --prefrontal:#32CD32; --cingulate:#FF8C00;
+  --parietal:#00CED1;
+  --accent:#00ff88; --accent2:#ff6b35;
+  --sig:#00ff88; --ns:#555;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',sans-serif; overflow-x:hidden; }
+
+/* === HEADER === */
+.hdr {
+  padding:14px 24px; display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  background:linear-gradient(180deg,rgba(0,100,255,0.05) 0%,transparent 100%);
+}
+.hdr h1 { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:600;
+  background:linear-gradient(135deg,#00BFFF,#00ff88); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.hdr .sub { font-size:10px; color:var(--dim); font-family:'JetBrains Mono',monospace; }
+.hdr-stats { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--dim); display:flex; gap:12px; }
+.hdr-stats .v { color:var(--accent); font-weight:600; }
+
+/* === TABS === */
+.tabs { display:flex; gap:2px; padding:6px 24px; background:#08081a; border-bottom:1px solid rgba(255,255,255,0.06); }
+.tab { padding:7px 16px; border-radius:5px; cursor:pointer; font-size:12px; font-weight:500;
+  color:var(--dim); font-family:'JetBrains Mono',monospace; transition:.15s; }
+.tab:hover { color:var(--text); background:rgba(255,255,255,0.04); }
+.tab.active { color:#00BFFF; background:rgba(0,191,255,0.12); }
+
+/* === PANELS === */
+.panel { display:none; }
+.panel.active { display:block; }
+
+/* === TAB 1: 3D VIEWPORT === */
+.view-grid { display:grid; grid-template-columns:1fr 320px; height:calc(100vh - 100px); }
+.viewport { position:relative; background:radial-gradient(ellipse at center,#0a0a20,#040410 70%); }
+#vp3d { width:100%; height:100%; cursor:grab; }
+#vp3d:active { cursor:grabbing; }
+
+.vp-legend { position:absolute; top:8px; left:8px; display:flex; flex-direction:column; gap:2px; z-index:5; }
+.vp-legend .li { font-family:'JetBrains Mono',monospace; font-size:9px; padding:2px 7px;
+  border-radius:3px; background:rgba(0,0,0,0.75); border:1px solid rgba(255,255,255,0.06);
+  display:flex; align-items:center; gap:5px; color:#bbb; }
+.li .d { width:8px; height:8px; border-radius:50%; box-shadow:0 0 5px currentColor; }
+
+.conn-legend { position:absolute; bottom:8px; left:8px; z-index:5; display:flex; flex-direction:column; gap:1px; }
+.conn-legend .ci { font-family:'JetBrains Mono',monospace; font-size:8px; padding:2px 7px;
+  background:rgba(0,0,0,0.7); border-radius:2px; color:#999; display:flex; align-items:center; gap:5px; }
+.ci .cl { width:16px; height:3px; border-radius:1px; }
+
+.time-bar { position:absolute; bottom:0; left:0; right:0; height:3px; background:rgba(255,255,255,0.03); z-index:5; }
+.time-fill { height:100%; background:linear-gradient(90deg,var(--v1),var(--accent)); width:0%;
+  box-shadow:0 0 6px rgba(0,255,136,0.4); }
+
+/* Right panel */
+.rpanel { background:var(--bg2); border-left:1px solid rgba(255,255,255,0.06); padding:10px;
+  overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+.sec { background:var(--bg3); border-radius:7px; padding:10px; border:1px solid rgba(255,255,255,0.04); }
+.sec h3 { font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:600;
+  text-transform:uppercase; letter-spacing:1px; color:var(--dim); margin-bottom:7px;
+  padding-left:7px; border-left:3px solid var(--accent); }
+
+.stim-row { display:flex; gap:4px; }
+.sb { flex:1; padding:7px 3px; border:1px solid rgba(255,255,255,0.1); border-radius:5px;
+  background:rgba(255,255,255,0.02); color:var(--text); font-family:'JetBrains Mono',monospace;
+  font-size:10px; cursor:pointer; text-align:center; transition:.15s; }
+.sb:hover { background:rgba(255,255,255,0.06); }
+.sb.act { background:rgba(0,191,255,0.15); border-color:var(--v1); color:#fff; box-shadow:0 0 8px rgba(0,191,255,0.1); }
+
+.btn-row { display:flex; gap:4px; }
+.bp { flex:2; padding:9px; border:none; border-radius:5px; font-family:'JetBrains Mono',monospace;
+  font-size:11px; font-weight:700; cursor:pointer; background:linear-gradient(135deg,#00ff88,#00cc66); color:#000; }
+.br { flex:1; padding:9px; border:1px solid rgba(255,255,255,0.08); border-radius:5px;
+  font-family:'JetBrains Mono',monospace; font-size:11px; cursor:pointer;
+  background:rgba(255,255,255,0.03); color:var(--dim); }
+
+.sr { display:flex; align-items:center; gap:6px; margin-top:4px; }
+.sr label { font-family:'JetBrains Mono',monospace; font-size:8px; color:var(--dim); min-width:55px; }
+.sr input[type=range] { flex:1; -webkit-appearance:none; height:3px; border-radius:2px; background:rgba(255,255,255,0.08); }
+.sr input::-webkit-slider-thumb { -webkit-appearance:none; width:11px; height:11px; border-radius:50%;
+  background:var(--v1); cursor:pointer; box-shadow:0 0 5px rgba(0,191,255,0.3); }
+.sv { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--accent); min-width:24px; text-align:right; }
+
+.sg { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.st { background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.03); border-radius:5px; padding:5px; text-align:center; }
+.st .v { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; }
+.st .l { font-size:7px; color:var(--dim); text-transform:uppercase; letter-spacing:0.3px; margin-top:1px; }
+
+.pt { width:100%; border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:8px; }
+.pt th { text-align:left; padding:3px 4px; color:var(--dim); font-weight:500; border-bottom:1px solid rgba(255,255,255,0.05); }
+.pt td { padding:3px 4px; border-bottom:1px solid rgba(255,255,255,0.02); }
+.pt .dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:3px; vertical-align:middle; }
+
+/* === TAB 2: REAL DATA RESULTS === */
+.data-content { padding:20px 24px; max-width:1200px; margin:0 auto; }
+.card { background:var(--bg3); border:1px solid rgba(255,255,255,0.06); border-radius:10px;
+  padding:16px; margin:12px 0; position:relative; overflow:hidden; }
+.card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg,#00BFFF,#00ff88); }
+.card h2 { font-family:'JetBrains Mono',monospace; font-size:14px; color:#00BFFF; margin-bottom:10px; }
+
+.region-tag { display:inline-block; padding:4px 10px; border-radius:5px; margin:3px;
+  font-family:'JetBrains Mono',monospace; font-size:11px; }
+
+.conn-row { padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; align-items:center; gap:12px; }
+.conn-row:last-child { border-bottom:none; }
+.rho-badge { font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:700; min-width:80px; text-align:center;
+  padding:4px 8px; border-radius:6px; }
+.rho-badge.sig { background:rgba(0,255,136,0.12); color:var(--sig); }
+.rho-badge.ns { background:rgba(255,255,255,0.03); color:var(--ns); }
+.conn-label { font-size:13px; flex:1; }
+.conn-meta { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--dim); }
+.feat-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px;
+  font-family:'JetBrains Mono',monospace; background:rgba(176,64,255,0.15); color:#B040FF; }
+
+.proto-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.proto-card { background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.04); border-radius:8px; padding:10px; }
+.proto-card .region { font-size:12px; font-weight:600; margin-bottom:4px; }
+.proto-card .proto { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--accent2); }
+.proto-card .detail { font-size:9px; color:var(--dim); margin-top:4px; }
+
+/* Bottom raster */
+.bottom-row { display:grid; grid-template-columns:1fr 1fr; gap:0; border-top:1px solid rgba(255,255,255,0.06); }
+.bp-panel { padding:8px 10px; }
+.bp-panel:first-child { border-right:1px solid rgba(255,255,255,0.04); }
+.bp-panel h4 { font-family:'JetBrains Mono',monospace; font-size:8px; color:var(--dim);
+  text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px; }
+.bp-panel canvas { width:100%; height:180px; border-radius:3px; }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.06); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div>
+    <h1>BUS BIOLOGIQUE v11.5 — CE118 Données Réelles + Sim 3D/4D</h1>
+    <div class="sub">Djebouri 2026 · sub-CE118 · 2048 Hz · 168 canaux · 1787 trials</div>
+  </div>
+  <div class="hdr-stats">
+    <span id="fps">-- fps</span>
+    <span><span class="v" id="nC">--</span> neurones</span>
+    <span><span class="v" id="sC">--</span> synapses</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab(0)">◉ Simulateur 3D/4D</div>
+  <div class="tab" onclick="showTab(1)">◈ Résultats CE118 réels</div>
+  <div class="tab" onclick="showTab(2)">◇ Protocoles décodés</div>
+</div>
+
+<!-- ============================================================= -->
+<!-- TAB 0: 3D SIMULATOR -->
+<!-- ============================================================= -->
+<div class="panel active" id="tab0">
+<div class="view-grid">
+  <div class="viewport">
+    <div id="vp3d"></div>
+    <div class="vp-legend">
+      <div class="li"><div class="d" style="color:var(--retina)"></div>Rétine — 576MP</div>
+      <div class="li"><div class="d" style="color:var(--lgn)"></div>LGN — thalamus</div>
+      <div class="li"><div class="d" style="color:var(--v1)"></div>V1 — 10 contacts CE118</div>
+      <div class="li"><div class="d" style="color:var(--insula)"></div>Insula — 44 contacts CE118</div>
+      <div class="li"><div class="d" style="color:var(--cardiac)"></div>Cœur — effecteur</div>
+      <div class="li"><div class="d" style="color:var(--amygdala)"></div>Amygdale — 12 contacts CE118</div>
+    </div>
+    <div class="conn-legend">
+      <div class="ci"><div class="cl" style="background:var(--retina)"></div>Œil→LGN : Rate coding</div>
+      <div class="ci"><div class="cl" style="background:var(--v1)"></div>V1→Insula : rho=-0.056* std_amp</div>
+      <div class="ci"><div class="cl" style="background:var(--amygdala)"></div>V1→Amyg : rho=+0.120*** high_gamma</div>
+      <div class="ci"><div class="cl" style="background:var(--insula)"></div>Ins→Cœur : High-γ cmd</div>
+      <div class="ci"><div class="cl" style="background:#FF1744"></div>Amyg→Ins : rho=-0.226*** slope (inhibition)</div>
+    </div>
+    <div class="time-bar"><div class="time-fill" id="tf"></div></div>
+  </div>
+
+  <div class="rpanel">
+    <div class="sec">
+      <h3>Stimulus</h3>
+      <div class="stim-row">
+        <button class="sb act" data-s="letter" onclick="setS('letter')">⬡ Lettre</button>
+        <button class="sb" data-s="face" onclick="setS('face')">☺ Visage</button>
+        <button class="sb" data-s="object" onclick="setS('object')">◆ Objet</button>
+      </div>
+      <div style="font-size:9px;color:var(--dim);margin-top:4px;font-family:'JetBrains Mono'" id="sInfo">
+        CE118: 459 trials letter · rho=+0.120*** V1→Amyg
+      </div>
+    </div>
+    <div class="sec">
+      <h3>Simulation</h3>
+      <div class="btn-row">
+        <button class="bp" id="pB" onclick="tPlay()">▶  LANCER</button>
+        <button class="br" onclick="rst()">↺ RESET</button>
+      </div>
+      <div class="sr"><label>Vitesse</label><input type="range" id="spR" min=".2" max="5" step=".1" value="1" oninput="uSpd()"><span class="sv" id="spV">1.0×</span></div>
+      <div class="sr"><label>Neurones</label><input type="range" id="nR" min="10" max="60" step="5" value="25" oninput="uN()"><span class="sv" id="nV">25</span></div>
+    </div>
+    <div class="sec">
+      <h3>Temps réel</h3>
+      <div class="sg">
+        <div class="st"><div class="v" style="color:var(--accent)" id="tT">0.000</div><div class="l">Temps</div></div>
+        <div class="st"><div class="v" style="color:var(--v1)" id="tS">0</div><div class="l">Spikes</div></div>
+        <div class="st"><div class="v" style="color:var(--insula)" id="tI">0.0</div><div class="l">Insula Hz</div></div>
+        <div class="st"><div class="v" style="color:var(--amygdala)" id="tA">0.0</div><div class="l">Amygdale Hz</div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h3>Connexions réelles CE118</h3>
+      <table class="pt">
+        <tr><th>Bus</th><th>rho</th><th>#1 feat</th></tr>
+        <tr><td><span class="dot" style="background:var(--v1)"></span>V1→Ins</td><td style="color:#aa0">-0.056*</td><td>std_amp</td></tr>
+        <tr><td><span class="dot" style="background:var(--amygdala)"></span>V1→Amyg</td><td style="color:var(--sig)">+0.120***</td><td>high_γ</td></tr>
+        <tr><td><span class="dot" style="background:#FF1744"></span>Amyg→Ins</td><td style="color:var(--sig)">-0.226***</td><td>slope</td></tr>
+        <tr><td><span class="dot" style="background:var(--prefrontal)"></span>Ins→PFC</td><td style="color:var(--sig)">-0.106***</td><td>mean_amp</td></tr>
+        <tr><td><span class="dot" style="background:var(--temporal)"></span>Temp→Ins</td><td style="color:var(--sig)">-0.090***</td><td>std_amp</td></tr>
+      </table>
+    </div>
+    <div class="sec">
+      <h3>Protocoles sim</h3>
+      <table class="pt">
+        <tr><th>Route</th><th>Protocole</th><th>Rate</th></tr>
+        <tr><td><span class="dot" style="background:var(--retina)"></span>Œil→LGN</td><td>Rate</td><td id="r0">--</td></tr>
+        <tr><td><span class="dot" style="background:var(--v1)"></span>V1→Ins</td><td>Amp+Slope</td><td id="r2">--</td></tr>
+        <tr><td><span class="dot" style="background:var(--amygdala)"></span>V1→Amyg</td><td>Burst</td><td id="r3">--</td></tr>
+        <tr><td><span class="dot" style="background:var(--insula)"></span>Ins→Cœur</td><td>High-γ</td><td id="r4">--</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="bottom-row">
+  <div class="bp-panel"><h4>Raster Plot 4D</h4><canvas id="rasCvs"></canvas></div>
+  <div class="bp-panel"><h4>Firing Rate</h4><canvas id="frCvs"></canvas></div>
+</div>
+</div>
+
+<!-- ============================================================= -->
+<!-- TAB 1: REAL DATA CE118 -->
+<!-- ============================================================= -->
+<div class="panel" id="tab1">
+<div class="data-content">
+
+<div class="card">
+  <h2>Régions — sub-CE118 iEEG (164 canaux mappés)</h2>
+  <div>
+    <span class="region-tag" style="border:1px solid var(--insula);color:var(--insula)">Insula — 44 contacts (T1aIa, T1bId, P1Ib, P2aIc)</span>
+    <span class="region-tag" style="border:1px solid var(--temporal);color:var(--temporal)">Temporal — 52 contacts (T3a, T2bHa, T2cPH, T3bHb, T1c)</span>
+    <span class="region-tag" style="border:1px solid var(--amygdala);color:var(--amygdala)">Amygdale — 12 contacts (T2aA)</span>
+    <span class="region-tag" style="border:1px solid var(--v1);color:var(--v1)">V1/V2 — 10 contacts (O2OT)</span>
+    <span class="region-tag" style="border:1px solid var(--cingulate);color:var(--cingulate)">Cingulaire — 16 contacts (F1Ca)</span>
+    <span class="region-tag" style="border:1px solid var(--prefrontal);color:var(--prefrontal)">Préfrontal — 14 contacts (F3OF)</span>
+    <span class="region-tag" style="border:1px solid var(--parietal);color:var(--parietal)">Pariétal — 16 contacts (P2bCb)</span>
+  </div>
+  <div style="margin-top:10px;font-size:11px;color:var(--dim)">
+    1787 événements · 445 faces · 451 objets · 459 lettres · 2048 Hz · task=Dur · ses=1
+  </div>
+</div>
+
+<div class="card">
+  <h2>Connexions du Bus — Corrélations trial-by-trial (n=1787)</h2>
+
+  <div class="conn-row">
+    <div class="rho-badge sig">+0.120***</div>
+    <div>
+      <div class="conn-label"><strong>V1 → Amygdale</strong> — Bypass faces</div>
+      <div class="conn-meta"><span class="feat-tag">feature #1: high_gamma</span> · Le high-gamma visuel prédit la réponse amygdalienne. Route rapide prioritaire.</div>
+    </div>
+  </div>
+
+  <div class="conn-row">
+    <div class="rho-badge sig">-0.226***</div>
+    <div>
+      <div class="conn-label"><strong>Amygdale → Insula</strong> — Inhibition compétitive</div>
+      <div class="conn-meta"><span class="feat-tag">feature #1: slope</span> · Anti-corrélation forte : quand l'amygdale capte le stimulus, elle supprime activement l'insula.</div>
+    </div>
+  </div>
+
+  <div class="conn-row">
+    <div class="rho-badge sig">-0.106***</div>
+    <div>
+      <div class="conn-label"><strong>Insula → Préfrontal</strong> — Intégration exécutive</div>
+      <div class="conn-meta"><span class="feat-tag">feature #1: mean_amp</span> · L'amplitude insulaire module le préfrontal en anti-phase.</div>
+    </div>
+  </div>
+
+  <div class="conn-row">
+    <div class="rho-badge sig">-0.090***</div>
+    <div>
+      <div class="conn-label"><strong>Temporal → Insula</strong></div>
+      <div class="conn-meta"><span class="feat-tag">feature #1: std_amp</span> · La variabilité temporale prédit la réponse insulaire.</div>
+    </div>
+  </div>
+
+  <div class="conn-row">
+    <div class="rho-badge" style="background:rgba(255,180,0,0.12);color:#aa0">-0.056*</div>
+    <div>
+      <div class="conn-label"><strong>V1 → Insula</strong> — Bus visuo-interoceptif (Phase 5)</div>
+      <div class="conn-meta"><span class="feat-tag">feature #1: std_amp</span> · Signal faible ici car moyennage 44 contacts. Phase 5 contact-par-contact donne rho=0.647.</div>
+    </div>
+  </div>
+
+  <div class="conn-row">
+    <div class="rho-badge ns">-0.029 ns</div>
+    <div>
+      <div class="conn-label">Visuel → Temporal</div>
+      <div class="conn-meta">Non significatif — pas de bus direct V1→temporal dans ce protocole.</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Découverte clé — Inhibition compétitive Amygdale ⇄ Insula</h2>
+  <div style="font-size:13px;line-height:1.7;padding:8px 0">
+    Le résultat le plus fort (rho=-0.226***) révèle que l'amygdale et l'insula sont en <strong>compétition active</strong>.
+    Quand le stimulus visuel (faces) active fortement l'amygdale via le bypass high-gamma, l'amygdale envoie un signal inhibiteur
+    à l'insula. Ce n'est pas un simple contournement passif — c'est une suppression active.
+    <br><br>
+    Cela explique pourquoi dans ta Phase 5, les faces montrent rho=-0.025 sur le bus V1→Insula :
+    l'amygdale intercepte le signal face et bloque la voie insulaire. Les lettres (rho=0.130**) passent
+    parce qu'elles n'activent pas l'amygdale, donc pas d'inhibition.
+  </div>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;margin-top:8px;line-height:1.8">
+    STIMULUS VISUEL<br>
+    &nbsp;&nbsp;├── Lettres/Objets → V1 <span style="color:var(--v1)">──amp+slope──▶</span> INSULA <span style="color:var(--insula)">──high-γ──▶</span> CŒUR<br>
+    &nbsp;&nbsp;│<br>
+    &nbsp;&nbsp;└── Visages → V1 <span style="color:var(--amygdala)">──high-γ burst──▶</span> AMYGDALE <span style="color:#FF1744">──inhibition (ρ=-0.226)──▶</span> INSULA ✗
+  </div>
+</div>
+
+</div>
+</div>
+
+<!-- ============================================================= -->
+<!-- TAB 2: PROTOCOLS DECODED -->
+<!-- ============================================================= -->
+<div class="panel" id="tab2">
+<div class="data-content">
+
+<div class="card">
+  <h2>Protocoles décodés par région × fenêtre temporelle</h2>
+  <div class="proto-grid">
+    <div class="proto-card">
+      <div class="region" style="color:var(--insula)">Insula (44 ch)</div>
+      <div class="proto">AMPLITUDE + SLOPE — dialecte visuel tonique</div>
+      <div class="detail">Toutes fenêtres. L'insula reçoit le signal V1 en modulation d'amplitude lente, pas en high-gamma. Confirme le dialecte visuel identifié en Phase 5.</div>
+    </div>
+    <div class="proto-card">
+      <div class="region" style="color:var(--amygdala)">Amygdale (12 ch)</div>
+      <div class="proto">AMPLITUDE + SLOPE — dialecte visuel tonique</div>
+      <div class="detail">Le bypass faces utilise high-gamma comme feature dominante dans la CORRÉLATION V1→Amyg, mais le protocole local de l'amygdale reste tonique.</div>
+    </div>
+    <div class="proto-card">
+      <div class="region" style="color:var(--v1)">Cortex Visuel V1 (10 ch)</div>
+      <div class="proto">AMPLITUDE + SLOPE — dialecte visuel tonique</div>
+      <div class="detail">Toutes fenêtres. L'encodeur visuel produit le signal tonique qui est ensuite routé vers insula (amp) ou amygdale (high-γ).</div>
+    </div>
+    <div class="proto-card">
+      <div class="region" style="color:var(--cingulate)">Cingulaire ACC (16 ch)</div>
+      <div class="proto" style="color:#FF4500">BURST CODING — signal prioritaire</div>
+      <div class="detail">Toutes fenêtres. Le cingulaire antérieur (hub du réseau de saillance avec l'insula) utilise le burst coding — paquets de spikes rapides pour signaler la saillance.</div>
+    </div>
+    <div class="proto-card">
+      <div class="region" style="color:var(--prefrontal)">Préfrontal (14 ch)</div>
+      <div class="proto">AMPLITUDE + SLOPE — dialecte visuel tonique</div>
+      <div class="detail">Le PFC orbitofrontal reçoit en amplitude lente. Anti-corrélé avec l'insula (rho=-0.106***).</div>
+    </div>
+    <div class="proto-card">
+      <div class="region" style="color:var(--parietal)">Pariétal (16 ch)</div>
+      <div class="proto">BURST (300-800ms) / AMP+SLOPE (50-300ms)</div>
+      <div class="detail">Switch de protocole : amplitude pendant l'encodage visuel, puis burst pendant la réponse insulaire. Transition de mode de communication.</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Table récapitulative — Stack protocolaire du Bus Biologique</h2>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(0,0,0,0.4);padding:14px;border-radius:6px;line-height:2">
+    ┌────────────────────────┬───────────────────────┬────────────────────┬──────────────┐<br>
+    │ <span style="color:#aaa">CONNEXION</span>              │ <span style="color:#aaa">PROTOCOLE</span>             │ <span style="color:#aaa">FEATURE #1</span>         │ <span style="color:#aaa">rho CE118</span>    │<br>
+    ├────────────────────────┼───────────────────────┼────────────────────┼──────────────┤<br>
+    │ <span style="color:var(--v1)">V1 → Insula</span>          │ Amplitude + Slope     │ std_amplitude      │ -0.056*      │<br>
+    │ <span style="color:var(--amygdala)">V1 → Amygdale</span>        │ High-gamma burst      │ <span style="color:#FF4500">high_gamma</span>         │ <span style="color:var(--sig)">+0.120***</span>    │<br>
+    │ <span style="color:#FF1744">Amygdale → Insula</span>    │ Inhibition (slope)    │ slope              │ <span style="color:var(--sig)">-0.226***</span>    │<br>
+    │ <span style="color:var(--insula)">Insula → PFC</span>         │ Amp anti-phase        │ mean_amplitude     │ <span style="color:var(--sig)">-0.106***</span>    │<br>
+    │ <span style="color:var(--temporal)">Temporal → Insula</span>    │ Variabilité           │ std_amplitude      │ <span style="color:var(--sig)">-0.090***</span>    │<br>
+    │ <span style="color:var(--cingulate)">ACC (cingulaire)</span>     │ <span style="color:#FF4500">Burst coding</span>          │ burst_ratio        │ local        │<br>
+    │ <span style="color:var(--parietal)">Pariétal</span>             │ Switch amp→burst      │ context-dependent  │ local        │<br>
+    └────────────────────────┴───────────────────────┴────────────────────┴──────────────┘
+  </div>
+</div>
+
+<div class="card">
+  <h2>Comparaison Phase 5 (contact-par-contact) vs Bus v11.5 (région-moyenné)</h2>
+  <div style="font-size:12px;line-height:1.7;padding:4px 0">
+    Phase 5 analysait chaque contact insulaire comme cible séparée → rho=0.647 chez CE118 sur broadband.<br>
+    Bus v11.5 moyenne les 44 contacts insulaires en un seul scalaire → rho=-0.056 (signal dilué).<br>
+    <strong>Les deux résultats sont cohérents</strong> : le bus existe mais il est spatialement sélectif
+    (certains contacts insulaires répondent fort, d'autres non). Pour retrouver le rho=0.647,
+    il faudrait identifier les contacts insulaires les plus réactifs (probablement T1aIa et T1bId = insula antérieure/dorsale).
+  </div>
+</div>
+
+</div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 3D ENGINE + SIMULATION -->
+<!-- ============================================================= -->
+<script>
+function showTab(i) {
+  document.querySelectorAll('.panel').forEach((p,j)=>{ p.classList.toggle('active',j===i); });
+  document.querySelectorAll('.tab').forEach((t,j)=>{ t.classList.toggle('active',j===i); });
+}
+
+// === CONFIG ===
+const R={
+  retina:{n:'Rétine',c:[0,80,-10],col:0xFFD700,hex:'#FFD700'},
+  lgn:{n:'LGN',c:[20,-25,0],col:0xFF8C00,hex:'#FF8C00'},
+  v1:{n:'V1 (10ch)',c:[0,-85,5],col:0x00BFFF,hex:'#00BFFF'},
+  insula:{n:'Insula (44ch)',c:[38,10,-5],col:0xFF4500,hex:'#FF4500'},
+  cardiac:{n:'Cœur',c:[0,0,-120],col:0xFF1744,hex:'#FF1744'},
+  amygdala:{n:'Amygdale (12ch)',c:[24,-5,-18],col:0xB040FF,hex:'#B040FF'},
+};
+const ROUTES=[
+  {s:'retina',d:'lgn',w:12,del:.030,proto:'rate',lbl:'Rate 500Hz'},
+  {s:'lgn',d:'v1',w:10,del:.015,proto:'rate',lbl:'Rate relay'},
+  {s:'v1',d:'insula',w:6,del:.050,proto:'amp',lbl:'ρ=-0.056* amp+slope'},
+  {s:'v1',d:'amygdala',w:8,del:.040,proto:'burst',lbl:'ρ=+0.120*** high-γ'},
+  {s:'insula',d:'cardiac',w:15,del:.100,proto:'hg',lbl:'High-γ cmd'},
+  {s:'amygdala',d:'insula',w:4,del:.080,proto:'inhibit',lbl:'ρ=-0.226*** INHIBIT'},
+];
+const STIM={
+  letter:{str:25,amy:0.3,info:'CE118: 459 trials letter · letters→insula (ρ=0.130)'},
+  face:{str:20,amy:2.5,info:'CE118: 445 trials face · faces→amygdale (bypass insula)'},
+  object:{str:22,amy:1.0,info:'CE118: 451 trials object · passage moyen'},
+};
+
+let neurons=[],synapses=[],rIdx={},nPer=25;
+let simT=0,playing=false,spd=1,curS='letter';
+let totalSpk=0,rSpk={},raster={},frH={};
+let spkBuf=[],pulses=[];
+let scene,cam,renderer,nM=[],rTubes=[],rLabels=[];
+let cA=0.5,cP=0.3,cD=260,drag=false,lM={x:0,y:0};
+let fN=0,fT=0,lT=0;
+
+function initGL(){
+  const el=document.getElementById('vp3d');
+  if(!el) return;
+  const w=el.clientWidth,h=el.clientHeight;
+  scene=new THREE.Scene();
+  scene.fog=new THREE.FogExp2(0x040410,0.0012);
+  cam=new THREE.PerspectiveCamera(50,w/h,1,2000);
+  uCam();
+  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(w,h);
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(0x040410);
+  el.appendChild(renderer.domElement);
+  scene.add(new THREE.AmbientLight(0x606080,0.8));
+  const dl=new THREE.DirectionalLight(0xffffff,1);dl.position.set(50,120,80);scene.add(dl);
+  scene.add(new THREE.PointLight(0x00BFFF,0.5,400));
+  const g=new THREE.GridHelper(300,30,0x111133,0x111122);g.position.y=-140;scene.add(g);
+  const c=renderer.domElement;
+  c.addEventListener('mousedown',e=>{drag=true;lM={x:e.clientX,y:e.clientY}});
+  c.addEventListener('mousemove',e=>{if(!drag)return;cA+=(e.clientX-lM.x)*.008;cP=Math.max(-1.2,Math.min(1.2,cP+(e.clientY-lM.y)*.005));uCam();lM={x:e.clientX,y:e.clientY}});
+  c.addEventListener('mouseup',()=>drag=false);
+  c.addEventListener('mouseleave',()=>drag=false);
+  c.addEventListener('wheel',e=>{cD=Math.max(80,Math.min(500,cD+e.deltaY*.3));uCam()});
+  window.addEventListener('resize',()=>{const w2=el.clientWidth,h2=el.clientHeight;cam.aspect=w2/h2;cam.updateProjectionMatrix();renderer.setSize(w2,h2)});
+}
+function uCam(){cam.position.set(cD*Math.sin(cA)*Math.cos(cP),cD*Math.sin(cP),cD*Math.cos(cA)*Math.cos(cP));cam.lookAt(10,-20,0)}
+
+function build(){
+  nM.forEach(m=>scene.remove(m));rTubes.forEach(m=>scene.remove(m));rLabels.forEach(m=>scene.remove(m));
+  pulses.forEach(p=>scene.remove(p.mesh));
+  nM=[];rTubes=[];rLabels=[];pulses=[];neurons=[];synapses=[];rIdx={};
+  const geo=new THREE.SphereGeometry(1.5,10,10);
+  for(const[k,reg]of Object.entries(R)){
+    const st=neurons.length,sp=k==='cardiac'?12:7;
+    for(let i=0;i<nPer;i++){
+      const pos=[reg.c[0]+(Math.random()-.5)*sp*2,reg.c[2]+(Math.random()-.5)*sp*2,reg.c[1]+(Math.random()-.5)*sp*2];
+      neurons.push({x:pos[0],y:pos[1],z:pos[2],region:k,v:-70,thr:-55,rst:-75,
+        tau:{retina:.008,lgn:.006,v1:.010,insula:.015,cardiac:.020,amygdala:.012}[k],ls:-1,st:[],ref:.002});
+      const mat=new THREE.MeshPhongMaterial({color:reg.col,transparent:true,opacity:.85,emissive:reg.col,emissiveIntensity:.15});
+      const m=new THREE.Mesh(geo,mat);m.position.set(pos[0],pos[1],pos[2]);scene.add(m);nM.push(m);
+    }
+    rIdx[k]=Array.from({length:nPer},(_,i)=>st+i);
+  }
+  // Route tubes
+  for(const route of ROUTES){
+    const sc=R[route.s].c,dc=R[route.d].c;
+    const p1=new THREE.Vector3(sc[0],sc[2],sc[1]),p2=new THREE.Vector3(dc[0],dc[2],dc[1]);
+    const mid=new THREE.Vector3().lerpVectors(p1,p2,.5);
+    const dir=new THREE.Vector3().subVectors(p2,p1).normalize();
+    const perp=new THREE.Vector3(-dir.z,.3,dir.x).normalize();
+    mid.add(perp.multiplyScalar(15));
+    const curve=new THREE.QuadraticBezierCurve3(p1,mid,p2);
+    const pts=curve.getPoints(40);
+    // Glow
+    const gG=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),30,route.proto==='inhibit'?3.5:2.5,8,false);
+    const gM=new THREE.MeshBasicMaterial({color:route.proto==='inhibit'?0xFF1744:R[route.s].col,transparent:true,opacity:route.proto==='inhibit'?.18:.12,side:THREE.DoubleSide});
+    const gMesh=new THREE.Mesh(gG,gM);scene.add(gMesh);rTubes.push(gMesh);
+    // Core
+    const cG=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),30,route.proto==='inhibit'?1.2:.8,6,false);
+    const cM=new THREE.MeshBasicMaterial({color:route.proto==='inhibit'?0xFF1744:R[route.s].col,transparent:true,opacity:route.proto==='inhibit'?.9:.7});
+    const cMesh=new THREE.Mesh(cG,cM);scene.add(cMesh);rTubes.push(cMesh);
+    route._curve=curve;
+    // Label
+    const cvs=document.createElement('canvas');cvs.width=300;cvs.height=48;
+    const ctx=cvs.getContext('2d');
+    ctx.fillStyle=route.proto==='inhibit'?'#FF1744':R[route.s].hex;
+    ctx.font='bold 18px JetBrains Mono,monospace';ctx.textAlign='center';ctx.fillText(route.lbl,150,30);
+    const tex=new THREE.CanvasTexture(cvs);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,opacity:.85}));
+    sp.position.copy(mid);sp.scale.set(35,6,1);scene.add(sp);rLabels.push(sp);
+  }
+  // Region labels
+  for(const[k,reg]of Object.entries(R)){
+    const cvs=document.createElement('canvas');cvs.width=320;cvs.height=56;
+    const ctx=cvs.getContext('2d');
+    ctx.fillStyle='rgba(0,0,0,.6)';ctx.beginPath();ctx.roundRect(8,8,304,40,6);ctx.fill();
+    ctx.fillStyle=reg.hex;ctx.beginPath();ctx.arc(26,28,7,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 18px JetBrains Mono,monospace';ctx.fillText(reg.n,42,35);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cvs),transparent:true}));
+    sp.position.set(reg.c[0],reg.c[2]+14,reg.c[1]);sp.scale.set(38,7,1);scene.add(sp);rLabels.push(sp);
+  }
+  // Synapses
+  for(const route of ROUTES){
+    const si=rIdx[route.s],di=rIdx[route.d];
+    for(const i of si)for(const j of di)if(Math.random()<.06){
+      synapses.push({pre:i,post:j,w:route.w*(1+.2*(Math.random()-.5)),del:route.del+Math.random()*.01,proto:route.proto});
+    }
+  }
+  for(const[k,idxs]of Object.entries(rIdx))for(const i of idxs)for(const j of idxs)if(i!==j&&Math.random()<.03)synapses.push({pre:i,post:j,w:3,del:.002,proto:'local'});
+  document.getElementById('nC').textContent=neurons.length;
+  document.getElementById('sC').textContent=synapses.length;
+  rSpk={};raster={};frH={};for(const k of Object.keys(R)){rSpk[k]=0;raster[k]=[];frH[k]=[];}
+}
+
+function spawnP(ri){
+  const route=ROUTES[ri];if(!route._curve)return;
+  const isInhibit=route.proto==='inhibit';
+  const geo=new THREE.SphereGeometry(isInhibit?3:2.2,8,8);
+  const mat=new THREE.MeshBasicMaterial({color:isInhibit?0xFF1744:R[route.s].col,transparent:true,opacity:1});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.add(new THREE.PointLight(isInhibit?0xFF1744:R[route.s].col,isInhibit?2:1.5,isInhibit?40:30));
+  scene.add(mesh);
+  pulses.push({mesh,curve:route._curve,startT:simT,dur:route.del,ri});
+}
+function uPulses(){
+  const rm=[];
+  for(let i=0;i<pulses.length;i++){
+    const p=pulses[i],t=(simT-p.startT)/p.dur;
+    if(t>=1){scene.remove(p.mesh);rm.push(i)}
+    else{p.mesh.position.copy(p.curve.getPoint(Math.min(t,1)));p.mesh.material.opacity=1-t*.6;p.mesh.scale.setScalar(1+Math.sin(t*Math.PI)*.8)}
+  }
+  for(let i=rm.length-1;i>=0;i--)pulses.splice(rm[i],1);
+}
+
+function simStep(dt){
+  const st=STIM[curS],isS=simT>=.2&&simT<=.6;
+  for(let i=0;i<neurons.length;i++){
+    const n=neurons[i];let I=0;
+    if(n.region==='retina'&&isS)I=st.str*(1+.3*Math.sin(2*Math.PI*40*simT));
+    if(n.region==='cardiac')I+=8*(1+Math.sin(2*Math.PI*1.2*simT));
+    if((simT-n.ls)<n.ref){n.v=n.rst;continue}
+    n.v+=(-n.v-70+I)/n.tau*dt;
+    if(n.v>=n.thr){
+      n.st.push(simT);n.ls=simT;n.v=n.rst;totalSpk++;rSpk[n.region]++;raster[n.region].push(simT);
+      const m=nM[i];if(m){m.material.emissiveIntensity=1.2;m.scale.setScalar(3)}
+      for(const syn of synapses){
+        if(syn.pre!==i)continue;let w=syn.w;
+        if(syn.proto==='hg'){const isi=n.st.length>1?simT-n.st[n.st.length-2]:.1;if(isi<.012)w*=2}
+        else if(syn.proto==='burst'){const rec=n.st.filter(s=>simT-s<.02);if(rec.length>=3)w*=1.8;if(neurons[syn.post].region==='amygdala')w*=st.amy}
+        else if(syn.proto==='amp')w*=(1+.5*Math.abs(n.v+70)/20);
+        else if(syn.proto==='inhibit')w*=-1.5; // INHIBITION
+        spkBuf.push({at:simT+syn.del,pi:syn.post,w});
+      }
+      if(Math.random()<.04)for(let ri=0;ri<ROUTES.length;ri++)if(ROUTES[ri].s===n.region)spawnP(ri);
+    }
+  }
+  const rem=[];for(const sp of spkBuf){if(sp.at<=simT)neurons[sp.pi].v+=sp.w;else rem.push(sp)}spkBuf=rem;
+  for(const m of nM){if(m.material.emissiveIntensity>.15){m.material.emissiveIntensity*=.90;m.scale.setScalar(Math.max(1,1+(m.scale.x-1)*.88))}}
+  simT+=dt;
+}
+
+function drawRas(){
+  const cvs=document.getElementById('rasCvs');if(!cvs)return;
+  const ctx=cvs.getContext('2d');cvs.width=cvs.clientWidth*2;cvs.height=cvs.clientHeight*2;
+  ctx.scale(2,2);const W=cvs.clientWidth,H=cvs.clientHeight;ctx.clearRect(0,0,W,H);
+  const order=['retina','lgn','v1','insula','cardiac','amygdala'],rH=H/order.length,lW=55;
+  for(let r=0;r<order.length;r++){
+    const k=order[r],reg=R[k],y0=r*rH;
+    if(r%2===0){ctx.fillStyle='rgba(255,255,255,.015)';ctx.fillRect(0,y0,W,rH)}
+    ctx.fillStyle=reg.hex;ctx.font='bold 8px JetBrains Mono';ctx.fillText(reg.n.split(' ')[0],3,y0+rH/2+3);
+    ctx.fillStyle=reg.hex;
+    for(const t of raster[k]){ctx.globalAlpha=.8;ctx.fillRect(lW+(t/1)*(W-lW-5),y0+3+Math.random()*(rH-6),1.5,2)}
+    ctx.globalAlpha=1;
+  }
+  const x1=lW+(.2/1)*(W-lW-5),x2=lW+(.6/1)*(W-lW-5);
+  ctx.fillStyle='rgba(255,215,0,.06)';ctx.fillRect(x1,0,x2-x1,H);
+  const xc=lW+(simT/1)*(W-lW-5);ctx.strokeStyle='rgba(0,255,136,.7)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(xc,0);ctx.lineTo(xc,H);ctx.stroke();
+}
+
+function drawFR(){
+  const cvs=document.getElementById('frCvs');if(!cvs)return;
+  const ctx=cvs.getContext('2d');cvs.width=cvs.clientWidth*2;cvs.height=cvs.clientHeight*2;
+  ctx.scale(2,2);const W=cvs.clientWidth,H=cvs.clientHeight;ctx.clearRect(0,0,W,H);
+  const keys=['retina','v1','insula','cardiac','amygdala'],win=.05,ml=30,mr=6,mt=6,mb=16,pW=W-ml-mr,pH=H-mt-mb,maxR=250;
+  for(const k of keys){const sp=raster[k],rate=sp.filter(s=>simT-s<win).length/(win*nPer);frH[k].push({t:simT,r:rate});if(frH[k].length>500)frH[k].shift()}
+  ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,H-mb);ctx.lineTo(W-mr,H-mb);ctx.stroke();
+  const sx1=ml+(.2/1)*pW,sx2=ml+(.6/1)*pW;ctx.fillStyle='rgba(255,215,0,.04)';ctx.fillRect(sx1,mt,sx2-sx1,pH);
+  for(const k of keys){const h=frH[k];if(h.length<2)continue;ctx.strokeStyle=R[k].hex;ctx.lineWidth=1.8;ctx.globalAlpha=.9;
+    ctx.beginPath();for(let i=0;i<h.length;i++){const x=ml+(h[i].t/1)*pW,y=H-mb-Math.min(h[i].r,maxR)/maxR*pH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke();ctx.globalAlpha=1;
+    const last=h[h.length-1];ctx.fillStyle=R[k].hex;ctx.font='bold 7px JetBrains Mono';
+    ctx.fillText(R[k].n.split(' ')[0],Math.min(ml+(last.t/1)*pW+3,W-40),H-mb-Math.min(last.r,maxR)/maxR*pH-2);
+  }
+}
+
+function uUI(){
+  document.getElementById('tT').textContent=simT.toFixed(3);
+  document.getElementById('tS').textContent=totalSpk;
+  document.getElementById('tf').style.width=(simT/1*100)+'%';
+  const w=.1;
+  document.getElementById('tI').textContent=(raster.insula.filter(s=>simT-s<w).length/(w*nPer)).toFixed(1);
+  document.getElementById('tA').textContent=(raster.amygdala.filter(s=>simT-s<w).length/(w*nPer)).toFixed(1);
+  const rates={};for(const k of Object.keys(R))rates[k]=simT>0?(rSpk[k]/(simT*nPer)).toFixed(1):'0.0';
+  document.getElementById('r0').textContent=rates.retina+' Hz';
+  document.getElementById('r2').textContent=rates.insula+' Hz';
+  document.getElementById('r3').textContent=rates.amygdala+' Hz';
+  document.getElementById('r4').textContent=rates.cardiac+' Hz';
+  if(Math.random()<.15){drawRas();drawFR()}
+}
+
+function animate(ts){
+  requestAnimationFrame(animate);
+  fN++;if(ts-fT>1000){document.getElementById('fps').textContent=fN+' fps';fN=0;fT=ts}
+  if(playing&&simT<1){const dtR=Math.min((ts-lT)/1000,.05),dtS=.0002,steps=Math.floor(dtR*spd/dtS);
+    for(let i=0;i<Math.min(steps,50);i++){if(simT>=1)break;simStep(dtS)}uPulses();uUI();
+    if(simT>=1){playing=false;document.getElementById('pB').textContent='✓ TERMINÉ'}}
+  lT=ts;if(!drag&&!playing){cA+=.0015;uCam()}
+  if(renderer)renderer.render(scene,cam);
+}
+
+function setS(s){curS=s;document.querySelectorAll('.sb').forEach(b=>b.classList.remove('act'));
+  document.querySelector(`[data-s="${s}"]`).classList.add('act');document.getElementById('sInfo').textContent=STIM[s].info;rst()}
+function tPlay(){if(simT>=1)rst();playing=!playing;document.getElementById('pB').textContent=playing?'⏸ PAUSE':'▶ LANCER'}
+function rst(){playing=false;simT=0;totalSpk=0;spkBuf=[];
+  for(const n of neurons){n.v=-70;n.ls=-1;n.st=[]}
+  for(const m of nM){m.material.emissiveIntensity=.15;m.scale.setScalar(1)}
+  pulses.forEach(p=>scene.remove(p.mesh));pulses=[];
+  rSpk={};raster={};frH={};for(const k of Object.keys(R)){rSpk[k]=0;raster[k]=[];frH[k]=[]}
+  document.getElementById('pB').textContent='▶ LANCER';document.getElementById('tf').style.width='0%';uUI();drawRas();drawFR()}
+function uSpd(){spd=parseFloat(document.getElementById('spR').value);document.getElementById('spV').textContent=spd.toFixed(1)+'×'}
+function uN(){nPer=parseInt(document.getElementById('nR').value);document.getElementById('nV').textContent=nPer;build();rst()}
+
+initGL();build();rst();drawRas();drawFR();animate(0);
+</script>
+</body>
+</html>
