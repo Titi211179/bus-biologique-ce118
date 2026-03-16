@@ -12,7 +12,7 @@ Sub-CE118 (2048 Hz · 168 canaux · 1787 trials) – Djebouri 2026
 
 ## 🎮 Comment l’utiliser
 Ouvre simplement :  
-**[https://titi211179.github.io/bus-biologique-ce118](https://tonusername.github.io/bus-biologique-ce118)**
+**(https://titi211179.github.io/bus-biologique-ce118/)**
 
 Clique sur **LANCER**, change de stimulus (Lettre / Visage / Objet) et regarde le drame neural se dérouler.
 
